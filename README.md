@@ -1,90 +1,129 @@
-# Waiting Room App — Workshop 3: Provider & Scalable State Management with TDD
+# Real-Time Waiting Room with Flutter & Supabase (TP4)
 
-A Flutter application developed using **Test-Driven Development (TDD)** demonstrating structured and scalable state management with the **Provider** package (`provider: ^6.0.0`).
+A distributed, real-time waiting room application built with **Flutter**, **Provider**, and **Supabase (PostgreSQL)**. 
 
----
-
-## 📌 Overview
-
-This project refactors the local state (`setState()`) implementation into a decoupled, maintainable architecture powered by `ChangeNotifier` and `ChangeNotifierProvider`.
-
-### Why Provider?
-- **Eliminates Prop-Drilling:** State is provided at the root and accessed directly anywhere in the widget hierarchy.
-- **Prevents Unnecessary Rebuilds:** Widgets reactively rebuild only when relevant data changes instead of rebuilding the entire tree.
-- **Clean Separation of Concerns:** Business logic lives entirely inside `QueueProvider`, independent of Flutter UI widgets.
+Changes made on one device (adding or serving clients) are instantly reflected across all connected devices in real time with zero manual refreshing.
 
 ---
 
-## ✨ Features
+## 📌 Features
 
-- **Add Clients:** Type a name into the input field and tap **Add** to place a client at the end of the queue.
-- **Live Queue Counter:** Displays real-time waiting count (`Clients in Queue: X`).
-- **Client List:** Displays waiting clients in an organized card list with individual delete buttons (`Icons.delete`).
-- **Serve Next Client (FIFO):** An AppBar action button (`Icons.skip_next`) that automatically serves and removes the client at the front of the line (index `0`).
+- **Real-Time Synchronization:** Instant updates across multiple devices using Supabase WebSocket channels (`supabase_realtime`).
+- **Distributed State Management:** Managed via `Provider` and `ChangeNotifier`, keeping UI decoupled from database interactions.
+- **FIFO Queue Processing:** "Next Client" button dequeues the earliest ticket in line according to timestamp.
+- **Type-Safe Data Model:** Dedicated `Client` model with robust JSON serialization (`fromMap` / `toMap`).
+- **Database Security:** Protected by PostgreSQL Row Level Security (RLS) with dedicated policies for anonymous queue access.
+- **100% Test Coverage:** Verified with unit tests, mocked Supabase integration tests, and interactive widget tests.
 
 ---
 
-## 🏗️ Architecture
+## 🏗️ Project Architecture
 
 ```
 lib/
-├── main.dart             # Root app, ChangeNotifierProvider, & WaitingRoomScreen (StatelessWidget)
-└── queue_provider.dart    # Central business logic extending ChangeNotifier
+├── models/
+│   └── client.dart        # Strongly typed Client data model (id, name, createdAt)
+├── queue_provider.dart    # ChangeNotifier managing queue logic & Supabase Realtime
+└── main.dart              # App entry point, Supabase initialization, & WaitingRoomScreen UI
+
 test/
-├── waiting_room_manager_test.dart # Unit tests for QueueProvider logic
-└── waiting_room_widget_test.dart  # Widget tests for reactive UI behavior
+├── client_model_test.dart        # Unit tests for JSON mapping & serialization
+├── queue_provider_test.dart      # Unit test with mocked Supabase client (mocktail)
+├── waiting_room_manager_test.dart# State logic tests (FIFO, add, delete)
+└── waiting_room_widget_test.dart # Widget interaction tests
 ```
-
-### 1. `QueueProvider` (`lib/queue_provider.dart`)
-Extends `ChangeNotifier` to manage queue state:
-- `List<String> get clients`: Exposes unmodifiable access to the queue.
-- `void addClient(String name)`: Appends client and calls `notifyListeners()`.
-- `void removeClient(String name)`: Removes a specific client and calls `notifyListeners()`.
-- `void nextClient()`: Implements FIFO queue consumption by removing the first client (`removeAt(0)`) and calling `notifyListeners()`.
-
-### 2. `WaitingRoomScreen` (`lib/main.dart`)
-A clean `StatelessWidget`:
-- Injected at the root via `ChangeNotifierProvider`.
-- Uses `context.watch<QueueProvider>()` to subscribe to state changes.
-- Uses `context.read<QueueProvider>()` to trigger methods without unnecessary re-renders.
 
 ---
 
-## 🧪 Test-Driven Development (TDD)
+## ⚙️ Core Functions & Classes
 
-All features were implemented using the **Red-Green-Refactor** TDD cycle:
+### 1. `Client` Model (`lib/models/client.dart`)
+- **`Client({required id, required name, required createdAt})`**: Immutable representation of a queue ticket.
+- **`Client.fromMap(map)`**: Deserializes database records with null-safe handling of timestamps.
+- **`toMap()`**: Serializes client data into JSON maps.
 
-### 1. Unit Tests (`test/waiting_room_manager_test.dart`)
-- `should add a client to the waiting list`
-- `should remove a client from the waiting list`
-- `should remove the first client when nextClient() is called`
+### 2. `QueueProvider` (`lib/queue_provider.dart`)
+- **`clients`**: Unmodifiable getter providing read access to the waiting list.
+- **`_fetchInitialClients()`**: Retrieves existing tickets from Supabase ordered by `created_at ASC`.
+- **`_setupRealtimeSubscription()`**: Listens to PostgreSQL `INSERT` and `DELETE` events over WebSockets and updates local state.
+- **`addClient(String name)`**: Inserts a new client ticket into the Supabase database.
+- **`removeClient(String id)`**: Deletes a specific client ticket by UUID.
+- **`nextClient()`**: Dequeues the client at the front of the line (index 0).
+- **`dispose()`**: Closes active WebSocket subscriptions to prevent memory leaks.
 
-### 2. Widget Tests (`test/waiting_room_widget_test.dart`)
-- `should add a new client to the list on button tap`
-- `should remove a client from the list when the delete button is tapped`
-- `should remove the first client from the list when "Next Client" is tapped`
+### 3. `WaitingRoomScreen` (`lib/main.dart`)
+- **Input Row**: Text field and "Add" button to add new clients.
+- **Queue List (`Consumer<QueueProvider>`)**: Displays waiting clients in cards showing name, date, and individual delete buttons.
+- **"Next Client" Button**: Green action button that serves the next client in line.
 
 ---
 
 ## 🚀 Getting Started
 
-### 1. Install Dependencies
+### 1. Prerequisites
+- [Flutter SDK](https://flutter.dev/docs/get-started/install) (3.x or higher)
+- A free [Supabase](https://supabase.com) account
+
+### 2. Install Dependencies
 ```bash
 flutter pub get
 ```
 
-### 2. Run Tests
+### 3. Environment Configuration
+Create a `.env` file in the project root:
+```properties
+SUPABASE_URL=https://your-project-id.supabase.co
+SUPABASE_ANON_KEY=your-supabase-anon-key
+```
+> *(Note: A `.env.example` template is provided. `.env` is ignored by Git to protect secrets).*
+
+### 4. Supabase Database Setup
+In your Supabase **SQL Editor**, execute:
+```sql
+-- Create table
+CREATE TABLE IF NOT EXISTS public.clients (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Enable RLS
+ALTER TABLE public.clients ENABLE ROW LEVEL SECURITY;
+
+-- Add RLS Policies
+CREATE POLICY "Allow public select" ON public.clients FOR SELECT TO anon USING (true);
+CREATE POLICY "Allow public insert" ON public.clients FOR INSERT TO anon WITH CHECK (true);
+CREATE POLICY "Allow public delete" ON public.clients FOR DELETE TO anon USING (true);
+
+-- Enable Realtime
+ALTER PUBLICATION supabase_realtime ADD TABLE public.clients;
+```
+
+---
+
+## 🧪 Testing
+
+Run the full automated test suite:
 ```bash
 flutter test
 ```
+All **10 tests** (model, mock client, business logic, and widget UI) should pass with 100% success.
 
-### 3. Run the Application
-```bash
-# On Web (Chrome or Edge)
-flutter run -d chrome
-# or
-flutter run -d edge
+---
 
-# On Windows desktop
-flutter run -d windows
-```
+## 📱 How to Test Multi-Device Real-Time Sync
+
+To verify live real-time synchronization between two devices:
+
+1. **Open two separate terminal windows:**
+   ```bash
+   # Window 1 (Chrome):
+   flutter run -d chrome
+
+   # Window 2 (Edge / Emulator):
+   flutter run -d edge
+   ```
+2. On **Window 1**, enter `"Alice"` and click **Add**.
+3. **Observe Window 2**: Alice appears **instantly** without reloading.
+4. On **Window 2**, click **Next Client**.
+5. **Observe both windows**: Alice is dequeued from both screens simultaneously in real time!

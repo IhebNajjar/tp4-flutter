@@ -1,23 +1,28 @@
 # AI Assistance Note
 
-**Project:** Waiting Room App (Workshop 3 — Provider & TDD)  
+**Project:** Workshop 4 — Real-Time Waiting Room with Flutter & Supabase  
 **Student:** Iheb Najjar  
 **Class:** DSI 31  
+**AI Assistant:** Antigravity (Google DeepMind)  
 
 ---
 
-During this workshop, an AI coding assistant was used for basic pair-programming support. 
+### Description of AI Usage:
+During this workshop, an AI coding assistant was used for standard pair-programming guidance, troubleshooting specific syntax errors, and resolving package configuration issues. The core logic, database setup, and feature implementations were guided by the workshop requirements.
 
-### What the AI Assistant Helped With:
+### Tasks the AI Assisted With:
+- **Dependency Troubleshooting:** Helping resolve package version conflicts in `pubspec.yaml` when adding `supabase_flutter` and `flutter_dotenv`.
+- **Asset Configuration:** Explaining how to register the `.env` file under the `assets:` section of `pubspec.yaml` so environment variables load properly.
+- **SQL / RLS Policy Syntax:** Providing standard PostgreSQL syntax for Row Level Security policies (`SELECT`, `INSERT`, `DELETE`) on the `clients` table.
+- **Defensive Parsing:** Assisting with handling null values safely inside `DateTime.parse()` in the `Client.fromMap()` model.
+- **Documentation Formatting:** Helping organize the project README and function explanations into clean Markdown.
 
-- **General Assistance:** Helped look up Flutter/Provider documentation and syntax references.
-- **Fixing Simple Bugs:** Helped fix minor syntax errors, typos, and simple import issues during code refactoring.
-- **Documentation Formatting:** Assisted in cleaning up and formatting Markdown notes for the project.
+---
 
-### Sample Prompts Used:
+### 5 Prompts Used During the Workshop:
 
-- *"How do I add the provider package to pubspec.yaml properly?"*
-- *"Can you run flutter test and show me which test failed and why?"*
-- *"What is the difference between context.read and context.watch inside an onPressed callback?"*
-- *"Why is my widget test throwing ProviderNotFoundException when pumping WaitingRoomApp?"*
-- *"Help me format my project notes and summary into a clean markdown file."*
+1. *"How do I fix missing packages in pubspec.yaml when adding supabase_flutter and flutter_dotenv?"*
+2. *"Why does flutter_dotenv throw an asset error, and how do I declare the .env file in pubspec.yaml assets?"*
+3. *"What is the SQL syntax for Supabase RLS policies to allow anonymous users to insert and delete tickets?"*
+4. *"How can I safely parse created_at in Client.fromMap so it doesn't crash if the value is null?"*
+5. *"Help me organize and format the project README documentation for my TP4 submission."*

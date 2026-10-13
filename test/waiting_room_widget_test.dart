@@ -7,7 +7,6 @@ import 'package:waiting_room_app/queue_provider.dart';
 void main() {
   testWidgets('should add a new client to the list on button tap',
       (WidgetTester tester) async {
-    // ARRANGE
     await tester.pumpWidget(
       ChangeNotifierProvider(
         create: (context) => QueueProvider(),
@@ -15,64 +14,71 @@ void main() {
       ),
     );
 
-    // ACT
-    await tester.enterText(find.byType(TextField), 'Alice');
-    await tester.tap(find.byType(ElevatedButton));
-    await tester.pump(); // Rebuild the widget after state change
+    // Initial empty state
+    expect(find.text('No one in queue yet...'), findsOneWidget);
 
-    // ASSERT
+    // Add a client
+    await tester.enterText(find.byType(TextField), 'Alice');
+    await tester.tap(find.widgetWithText(ElevatedButton, 'Add'));
+    await tester.pump();
+
+    // Verify Alice is in the list
     expect(find.text('Alice'), findsOneWidget);
-    expect(find.text('Clients in Queue: 1'), findsOneWidget);
+    expect(find.text('No one in queue yet...'), findsNothing);
   });
 
   testWidgets(
       'should remove a client from the list when the delete button is tapped',
       (WidgetTester tester) async {
-    // ARRANGE
     await tester.pumpWidget(
       ChangeNotifierProvider(
         create: (context) => QueueProvider(),
         child: const WaitingRoomApp(),
       ),
     );
+
     await tester.enterText(find.byType(TextField), 'Bob');
-    await tester.tap(find.byType(ElevatedButton));
+    await tester.tap(find.widgetWithText(ElevatedButton, 'Add'));
     await tester.pump();
 
-    // ACT
-    // Find the delete icon associated with 'Bob' and tap it.
+    expect(find.text('Bob'), findsOneWidget);
+
+    // Tap delete button
     await tester.tap(find.byIcon(Icons.delete));
     await tester.pump();
 
-    // ASSERT
     expect(find.text('Bob'), findsNothing);
-    expect(find.text('Clients in Queue: 0'), findsOneWidget);
+    expect(find.text('No one in queue yet...'), findsOneWidget);
   });
 
   testWidgets(
       'should remove the first client from the list when "Next Client" is tapped',
       (WidgetTester tester) async {
-    // ARRANGE
-    // We need to provide the QueueProvider to our widget tree for the test.
     await tester.pumpWidget(
       ChangeNotifierProvider(
         create: (context) => QueueProvider(),
         child: const WaitingRoomApp(),
       ),
     );
-    // Add two clients to the list first
+
+    // Add two clients
     await tester.enterText(find.byType(TextField), 'Client A');
-    await tester.tap(find.byType(ElevatedButton));
+    await tester.tap(find.widgetWithText(ElevatedButton, 'Add'));
     await tester.pump();
+
     await tester.enterText(find.byType(TextField), 'Client B');
-    await tester.tap(find.byType(ElevatedButton));
+    await tester.tap(find.widgetWithText(ElevatedButton, 'Add'));
     await tester.pump();
-    // ACT
-    await tester.tap(find.byKey(const Key('nextClientButton'))); // Find and tap the new button
+
+    expect(find.text('Client A'), findsOneWidget);
+    expect(find.text('Client B'), findsOneWidget);
+
+    // Tap Next Client
+    await tester.tap(find.widgetWithText(ElevatedButton, 'Next Client'));
     await tester.pump();
-    // ASSERT
+
+    // Client A is dequeued, Client B remains
     expect(find.text('Client A'), findsNothing);
     expect(find.text('Client B'), findsOneWidget);
-    expect(find.text('Clients in Queue: 1'), findsOneWidget);
   });
 }

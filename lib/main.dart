@@ -1,8 +1,41 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:waiting_room_app/queue_provider.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Load environment variables from .env
+  try {
+    await dotenv.load(fileName: ".env");
+  } catch (e) {
+    debugPrint('Could not load .env file: $e');
+  }
+
+  final supabaseUrl = dotenv.env['SUPABASE_URL'] ?? '';
+  final supabaseAnonKey = dotenv.env['SUPABASE_ANON_KEY'] ?? '';
+
+  if (supabaseUrl.isNotEmpty &&
+      supabaseAnonKey.isNotEmpty &&
+      !supabaseUrl.contains('your-project-id')) {
+    await Supabase.initialize(
+      url: supabaseUrl,
+      // ignore: deprecated_member_use
+      anonKey: supabaseAnonKey,
+    );
+
+    // Attempt anonymous sign-in if enabled in Supabase
+    try {
+      final authResponse =
+          await Supabase.instance.client.auth.signInAnonymously();
+      debugPrint('Signed in anonymously as user: ${authResponse.user?.id}');
+    } catch (e) {
+      debugPrint('Anonymous sign-in skipped or unavailable: $e');
+    }
+  }
+
   runApp(
     ChangeNotifierProvider(
       create: (context) => QueueProvider(),
@@ -16,81 +49,128 @@ class WaitingRoomApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
+    return MaterialApp(
+      title: 'Waiting Room',
       debugShowCheckedModeBanner: false,
-      home: WaitingRoomScreen(),
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+        useMaterial3: true,
+      ),
+      home: const WaitingRoomScreen(),
     );
   }
 }
 
-// Make WaitingRoomScreen a StatelessWidget
-class WaitingRoomScreen extends StatelessWidget {
+class WaitingRoomScreen extends StatefulWidget {
   const WaitingRoomScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    // Use context.watch() to listen for state changes.
-    final queueProvider = context.watch<QueueProvider>();
-    final TextEditingController _controller = TextEditingController();
+  State<WaitingRoomScreen> createState() => _WaitingRoomScreenState();
+}
 
+class _WaitingRoomScreenState extends State<WaitingRoomScreen> {
+  final TextEditingController _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submitClient() {
+    final name = _controller.text;
+    if (name.trim().isNotEmpty) {
+      context.read<QueueProvider>().addClient(name);
+      _controller.clear();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Local Waiting Room'),
-        actions: [
-          IconButton(
-            key: const Key('nextClientButton'),
-            icon: const Icon(Icons.skip_next),
-            onPressed: () {
-              // Use context.read() to call a method without listening for changes.
-              context.read<QueueProvider>().nextClient();
-            },
-            tooltip: 'Next Client',
-          ),
-        ],
+        title: const Text('Waiting Room'),
+        centerTitle: true,
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
+            // Input Field and Add Button
             Row(
               children: [
                 Expanded(
                   child: TextField(
                     controller: _controller,
-                    decoration: const InputDecoration(labelText: 'Client Name'),
+                    decoration: const InputDecoration(
+                      hintText: 'Enter name',
+                      border: OutlineInputBorder(),
+                    ),
+                    onSubmitted: (_) => _submitClient(),
                   ),
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton(
-                  onPressed: () {
-                    if (_controller.text.isNotEmpty) {
-                      context.read<QueueProvider>().addClient(_controller.text);
-                      _controller.clear();
-                    }
-                  },
+                  onPressed: _submitClient,
                   child: const Text('Add'),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            Text('Clients in Queue: ${queueProvider.clients.length}'),
+            const SizedBox(height: 20),
+            // Realtime Queue List
             Expanded(
-              child: ListView.builder(
-                itemCount: queueProvider.clients.length,
-                itemBuilder: (context, index) {
-                  final clientName = queueProvider.clients[index];
-                  return Card(
-                    child: ListTile(
-                      title: Text(clientName),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.delete),
-                        onPressed: () {
-                          context.read<QueueProvider>().removeClient(clientName);
-                        },
-                      ),
-                    ),
+              child: Consumer<QueueProvider>(
+                builder: (context, provider, _) {
+                  if (provider.clients.isEmpty) {
+                    return const Center(
+                      child: Text('No one in queue yet...'),
+                    );
+                  }
+                  return ListView.builder(
+                    itemCount: provider.clients.length,
+                    itemBuilder: (context, index) {
+                      final client = provider.clients[index];
+                      final dateFormatted = client.createdAt
+                          .toLocal()
+                          .toString()
+                          .split(' ')[0];
+                      return Card(
+                        margin: const EdgeInsets.symmetric(vertical: 4),
+                        child: ListTile(
+                          title: Text(client.name),
+                          subtitle: Text(
+                            dateFormatted,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey,
+                            ),
+                          ),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.delete, color: Colors.red),
+                            onPressed: () {
+                              context
+                                  .read<QueueProvider>()
+                                  .removeClient(client.id);
+                            },
+                          ),
+                        ),
+                      );
+                    },
                   );
                 },
+              ),
+            ),
+            // Next Client Button
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: () {
+                context.read<QueueProvider>().nextClient();
+              },
+              icon: const Icon(Icons.arrow_forward),
+              label: const Text('Next Client'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
               ),
             ),
           ],
